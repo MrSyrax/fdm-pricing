@@ -7,8 +7,8 @@ Cloud:  deployed on Render, uses DATABASE_URL env var from Supabase
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 
 app = Flask(__name__, static_folder=".")
 CORS(app)
@@ -17,7 +17,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
 def init_db():
