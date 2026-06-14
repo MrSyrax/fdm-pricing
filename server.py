@@ -13,11 +13,21 @@ from psycopg.rows import dict_row
 app = Flask(__name__, static_folder=".")
 CORS(app)
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    traceback.print_exc()
+    return jsonify({"error": str(e)}), 500
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_conn():
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    url = DATABASE_URL
+    # Supabase requires SSL — append if not already present
+    if url and "sslmode" not in url:
+        url += "?sslmode=require"
+    return psycopg.connect(url, row_factory=dict_row)
 
 
 def init_db():
