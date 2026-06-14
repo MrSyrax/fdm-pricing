@@ -164,7 +164,6 @@ def bulk_update():
 if __name__ == "__main__":
     if not DATABASE_URL:
         print("ERROR: DATABASE_URL environment variable not set.")
-        print("Create a .env file with DATABASE_URL=your_supabase_connection_string")
         exit(1)
     init_db()
     print("=" * 50)
@@ -173,3 +172,7 @@ if __name__ == "__main__":
     print("  Press Ctrl+C to stop")
     print("=" * 50)
     app.run(port=5000, debug=False)
+else:
+    # Running under gunicorn on Render — init DB on startup
+    if DATABASE_URL:
+        init_db()
