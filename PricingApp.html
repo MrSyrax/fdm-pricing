@@ -1,0 +1,364 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kevin's 3D Lab - FDM Price Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-8">
+            <h1 class="text-4xl font-bold">Kevin's 3D Lab</h1>
+            <p class="text-blue-100 mt-1">FDM Print Price Calculator</p>
+        </div>
+
+        <div class="p-8 space-y-8">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Product Name</label>
+                <input id="product" type="text" placeholder="e.g. Custom Dragon Figurine"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filament Usage (grams)</label>
+                    <input id="grams" type="number" min="1" value="100"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Print Time (hours)</label>
+                    <input id="hours" type="number" min="0" step="0.1" value="5"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-5 rounded-2xl space-y-2 text-sm">
+                <div class="flex justify-between"><span class="text-gray-600">Filament Cost:</span><span id="filament-display" class="font-medium">$0.00</span></div>
+                <div class="flex justify-between"><span class="text-gray-600">Print Time Cost:</span><span id="time-display" class="font-medium">$0.00</span></div>
+                <div class="pt-2 border-t border-gray-300 flex justify-between font-semibold">
+                    <span>Subtotal (before markup):</span>
+                    <span id="subtotal" class="text-blue-600">$0.00</span>
+                </div>
+            </div>
+
+            <div class="bg-emerald-50 p-5 rounded-2xl flex justify-between items-center">
+                <div>
+                    <span class="font-bold text-emerald-800">300% Markup</span>
+                    <div class="text-xs text-emerald-600">(x3 on materials + time)</div>
+                </div>
+                <div id="markup-display" class="text-2xl font-bold text-emerald-700">$0.00</div>
+            </div>
+
+            <div class="flex justify-between items-center bg-gray-50 p-5 rounded-2xl">
+                <span class="font-medium">Shipping Materials</span>
+                <span class="font-semibold">$5.00</span>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3">Finish Options</label>
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">PRIMER</label>
+                        <select id="primer" class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500">
+                            <option value="0">No Primer - $0</option>
+                            <option value="5">Small - $5</option>
+                            <option value="10">Medium - $10</option>
+                            <option value="20">Large - $20</option>
+                            <option value="40">X-Large - $40</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">PAINT (includes Primer)</label>
+                        <select id="paint" class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500">
+                            <option value="0">No Paint - $0</option>
+                            <option value="10">Small - $10</option>
+                            <option value="30">Medium - $30</option>
+                            <option value="60">Large - $60</option>
+                            <option value="110">X-Large - $110</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <div class="uppercase tracking-widest text-xs text-gray-500">FINAL PRICE</div>
+                        <div id="total" class="text-6xl font-bold text-gray-900">$0.00</div>
+                    </div>
+                    <button onclick="saveQuote()"
+                            class="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-semibold transition">
+                        💾 Save Quote
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="border-t bg-gray-50 p-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-semibold text-lg">Saved Quotes</h2>
+                <div class="flex gap-3 flex-wrap">
+                    <button onclick="downloadBackup()"
+                            class="text-sm px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+                        📥 Download Backup
+                    </button>
+                    <button id="bulkEditBtn" onclick="toggleBulkEdit()"
+                            class="text-sm px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl">
+                        ✏️ Bulk Edit
+                    </button>
+                </div>
+            </div>
+            <div id="status" class="text-xs text-gray-400 mb-2"></div>
+            <div id="history" class="text-sm max-h-96 overflow-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        let quotes = [];
+        let bulkEditMode = false;
+
+        async function apiFetch(url, options = {}) {
+            const res = await fetch(url, {
+                headers: { "Content-Type": "application/json" },
+                ...options
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+
+        function setStatus(msg, isError = false) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = isError ? 'text-xs text-red-500 mb-2' : 'text-xs text-green-600 mb-2';
+            if (msg) setTimeout(() => el.textContent = '', 3000);
+        }
+
+        async function loadQuotes() {
+            try {
+                quotes = await apiFetch('/api/quotes');
+                renderHistory();
+            } catch (e) {
+                setStatus('Could not reach server. Is server.py running?', true);
+            }
+        }
+
+        async function saveQuote() {
+            const product   = document.getElementById('product').value.trim() || "Unnamed Product";
+            const grams     = parseFloat(document.getElementById('grams').value) || 0;
+            const hours     = parseFloat(document.getElementById('hours').value) || 0;
+            const primerVal = parseFloat(document.getElementById('primer').value) || 0;
+            const paintVal  = parseFloat(document.getElementById('paint').value) || 0;
+
+            const filamentCost = grams * 0.02;
+            const timeCost     = hours * 0.70;
+            const subtotal     = filamentCost + timeCost;
+            const markup       = subtotal * 3;
+            const shipping     = 5;
+
+            const newQuote = {
+                date:       new Date().toLocaleDateString('en-US'),
+                product:    product,
+                plainCost:  (markup + shipping).toFixed(2),
+                primerCost: (markup + shipping + primerVal).toFixed(2),
+                paintCost:  (markup + shipping + paintVal).toFixed(2),
+                grams, hours, primerVal, paintVal
+            };
+
+            try {
+                const result = await apiFetch('/api/quotes', { method: 'POST', body: JSON.stringify(newQuote) });
+                newQuote.id = result.id;
+                quotes.unshift(newQuote);
+                renderHistory();
+                setStatus('Quote saved.');
+            } catch (e) {
+                setStatus('Failed to save: ' + e.message, true);
+            }
+        }
+
+        function editQuote(index) {
+            const q = quotes[index];
+            document.getElementById('product').value = q.product;
+            document.getElementById('grams').value   = q.grams || 100;
+            document.getElementById('hours').value   = q.hours || 5;
+            document.getElementById('primer').value  = q.primerVal || 0;
+            document.getElementById('paint').value   = q.paintVal || 0;
+            calculatePrice();
+            window.scrollTo(0, 0);
+        }
+
+        async function deleteQuote(index) {
+            if (!confirm("Delete this quote?")) return;
+            const q = quotes[index];
+            try {
+                await apiFetch(`/api/quotes/${q.id}`, { method: 'DELETE' });
+                quotes.splice(index, 1);
+                renderHistory();
+                setStatus('Quote deleted.');
+            } catch (e) {
+                setStatus('Failed to delete: ' + e.message, true);
+            }
+        }
+
+        function toggleBulkEdit() {
+            bulkEditMode = true;
+            document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Editing...';
+            document.getElementById('bulkEditBtn').disabled = true;
+            renderHistory();
+        }
+
+        function cancelBulkEdit() {
+            bulkEditMode = false;
+            document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Bulk Edit';
+            document.getElementById('bulkEditBtn').disabled = false;
+            loadQuotes(); // reload fresh from server
+        }
+
+        async function saveBulkEdits() {
+            const rows = document.querySelectorAll('#history tbody tr[data-index]');
+            rows.forEach(row => {
+                const i = parseInt(row.dataset.index);
+                row.querySelectorAll('input[data-field]').forEach(input => {
+                    quotes[i][input.dataset.field] = input.value.trim();
+                });
+            });
+            try {
+                await apiFetch('/api/quotes/bulk', { method: 'PUT', body: JSON.stringify(quotes) });
+                bulkEditMode = false;
+                document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Bulk Edit';
+                document.getElementById('bulkEditBtn').disabled = false;
+                renderHistory();
+                setStatus('All changes saved.');
+            } catch (e) {
+                setStatus('Failed to save changes: ' + e.message, true);
+            }
+        }
+
+        async function deleteBulkRow(index) {
+            const q = quotes[index];
+            if (q.id) {
+                try {
+                    await apiFetch(`/api/quotes/${q.id}`, { method: 'DELETE' });
+                } catch (e) {
+                    setStatus('Failed to delete row: ' + e.message, true);
+                    return;
+                }
+            }
+            quotes.splice(index, 1);
+            renderHistory();
+        }
+
+        function downloadBackup() {
+            if (quotes.length === 0) return alert("No quotes to export.");
+            const today = new Date();
+            const dateStr = today.getFullYear() + '-' +
+                String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                String(today.getDate()).padStart(2, '0');
+            const data = quotes.map(q => ({
+                Date: q.date, Product: q.product,
+                "Plain Cost": q.plainCost, "Primer Cost": q.primerCost, "Paint Cost": q.paintCost
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "FDM Quotes");
+            XLSX.writeFile(wb, `FDM_Print_Prices_${dateStr}.xlsx`);
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history');
+
+            if (bulkEditMode) {
+                const cc = "border border-gray-300 rounded px-1 py-1 w-full focus:outline-none focus:ring-1 focus:ring-purple-400";
+                let html = `<div class="mb-3 flex gap-2">
+                    <button onclick="saveBulkEdits()" class="text-sm px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold">&#128190; Save All Changes</button>
+                    <button onclick="cancelBulkEdit()" class="text-sm px-4 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-xl">Cancel</button>
+                </div>`;
+                if (quotes.length === 0) {
+                    html += `<p class="text-gray-400 italic">No quotes remaining.</p>`;
+                } else {
+                    html += `<div class="overflow-x-auto"><table class="w-full text-xs">
+                        <thead><tr class="border-b bg-white">
+                            <th class="py-2 text-left pr-2">Date</th>
+                            <th class="py-2 text-left pr-2">Product</th>
+                            <th class="py-2 text-right pr-2">Plain ($)</th>
+                            <th class="py-2 text-right pr-2">+Primer ($)</th>
+                            <th class="py-2 text-right pr-2">+Paint ($)</th>
+                            <th class="py-2 w-12"></th>
+                        </tr></thead><tbody>`;
+                    quotes.forEach((q, i) => {
+                        const sp = q.product.replace(/"/g, '&quot;');
+                        html += `<tr class="border-b hover:bg-purple-50" data-index="${i}">
+                            <td class="py-1 pr-2"><input class="${cc}" data-field="date" value="${q.date}"></td>
+                            <td class="py-1 pr-2"><input class="${cc}" data-field="product" value="${sp}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="plainCost" value="${q.plainCost}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="primerCost" value="${q.primerCost}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="paintCost" value="${q.paintCost}"></td>
+                            <td class="py-1 text-center"><button onclick="deleteBulkRow(${i})" class="text-red-500 hover:text-red-700 font-bold">&#x2715;</button></td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table></div>`;
+                }
+                container.innerHTML = html;
+                return;
+            }
+
+            if (quotes.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 italic">No quotes saved yet.</p>`;
+                return;
+            }
+            let html = `<table class="w-full"><thead><tr class="border-b bg-white">
+                <th class="py-3 text-left">Date</th><th class="py-3 text-left">Product</th>
+                <th class="py-3 text-right">Plain</th><th class="py-3 text-right">+Primer</th>
+                <th class="py-3 text-right">+Paint</th><th class="py-3 w-24"></th>
+            </tr></thead><tbody>`;
+            quotes.forEach((q, i) => {
+                html += `<tr class="border-b hover:bg-gray-50">
+                    <td class="py-3">${q.date}</td>
+                    <td class="py-3 font-medium">${q.product}</td>
+                    <td class="py-3 text-right">${q.plainCost}</td>
+                    <td class="py-3 text-right">${q.primerCost}</td>
+                    <td class="py-3 text-right">${q.paintCost}</td>
+                    <td class="py-3 text-center">
+                        <button onclick="editQuote(${i})" class="text-blue-600 hover:text-blue-800 text-xs mr-2">Edit</button>
+                        <button onclick="deleteQuote(${i})" class="text-red-600 hover:text-red-800 text-xs">Delete</button>
+                    </td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function calculatePrice() {
+            const grams  = parseFloat(document.getElementById('grams').value) || 0;
+            const hours  = parseFloat(document.getElementById('hours').value) || 0;
+            const primer = parseFloat(document.getElementById('primer').value) || 0;
+            const paint  = parseFloat(document.getElementById('paint').value) || 0;
+
+            const filamentCost = grams * 0.02;
+            const timeCost     = hours * 0.70;
+            const subtotal     = filamentCost + timeCost;
+            const markup       = subtotal * 3;
+            const shipping     = 5;
+            const total        = markup + shipping + primer + paint;
+
+            document.getElementById('filament-display').textContent = '$' + filamentCost.toFixed(2);
+            document.getElementById('time-display').textContent     = '$' + timeCost.toFixed(2);
+            document.getElementById('subtotal').textContent         = '$' + subtotal.toFixed(2);
+            document.getElementById('markup-display').textContent   = '$' + markup.toFixed(2);
+            document.getElementById('total').textContent            = '$' + total.toFixed(2);
+        }
+
+        window.onload = () => {
+            ['grams', 'hours', 'primer', 'paint', 'product'].forEach(id => {
+                document.getElementById(id).addEventListener('input', calculatePrice);
+            });
+            calculatePrice();
+            loadQuotes();
+        };
+    </script>
+</body>
+</html>
