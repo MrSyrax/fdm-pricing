@@ -23,9 +23,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_conn():
-    url = DATABASE_URL
-    # Supabase requires SSL — append if not already present
-    if url and "sslmode" not in url:
+    url = os.environ.get("DATABASE_URL")  # read fresh each time
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set.")
+    if "sslmode" not in url:
         url += "?sslmode=require"
     return psycopg.connect(url, row_factory=dict_row)
 
@@ -172,7 +173,7 @@ def bulk_update():
 
 
 if __name__ == "__main__":
-    if not DATABASE_URL:
+    if not os.environ.get("DATABASE_URL"):
         print("ERROR: DATABASE_URL environment variable not set.")
         exit(1)
     init_db()
@@ -184,5 +185,5 @@ if __name__ == "__main__":
     app.run(port=5000, debug=False)
 else:
     # Running under gunicorn on Render — init DB on startup
-    if DATABASE_URL:
+    if os.environ.get("DATABASE_URL"):
         init_db()
