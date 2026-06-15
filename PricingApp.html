@@ -24,19 +24,12 @@
                        class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
             </div>
 
-            <div class="grid grid-cols-2 gap-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Filament Usage (grams)</label>
-                    <input id="grams" type="number" min="0" step="0.01" value="100"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <label class="block text-sm font-medium text-gray-700">Print Plates</label>
+                    <button onclick="addPlate()" class="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl font-medium">+ Add Plate</button>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Print Time (h.mm)</label>
-                    <input id="hours" type="number" min="0" step="0.01" value="5.00"
-                           placeholder="e.g. 2.13 = 2hr 13min"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
-                    <p class="text-xs text-gray-400 mt-1">Format: h.mm (2.13 = 2hr 13min)</p>
-                </div>
+                <div id="plates-container" class="space-y-3"></div>
             </div>
 
             <div class="bg-gray-50 p-5 rounded-2xl space-y-2 text-sm">
@@ -123,9 +116,328 @@
     <script>
         let quotes = [];
         let bulkEditMode = false;
+        let plateCount = 0;
 
-        // Convert h.mm format to decimal hours (2.13 → 2 + 13/60)
+        // Convert h.mm to decimal hours (2.13 → 2hr 13min)
         function parseHours(val) {
+            const str = String(val);
+            const parts = str.split('.');
+            const hrs = parseInt(parts[0]) || 0;
+            const mins = parts[1] ? parseInt(parts[1].padEnd(2, '0').substring(0, 2)) : 0;
+            return hrs + (mins / 60);
+        }
+
+        function addPlate(grams = '', hours = '') {
+            plateCount++;
+            const id = plateCount;
+            const container = document.getElementById('plates-container');
+            const div = document.createElement('div');
+            div.id = 'plate-' + id;
+            div.className = 'grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-2xl relative';
+            div.innerHTML = `
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">PLATE ${id} — Filament (g)</label>
+                    <input type="number" min="0" step="0.01" value="${grams}"
+                           placeholder="e.g. 55.58"
+                           class="plate-grams w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">PLATE ${id} — Print Time (h.mm)</label>
+                    <input type="number" min="0" step="0.01" value="${hours}"
+                           placeholder="e.g. 2.13"
+                           class="plate-hours w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-400 mt-1">h.mm (2.13 = 2hr 13min)</p>
+                </div>
+                ${id > 1 ? `<button onclick="removePlate(${id})" class="absolute top-2 right-3 text-red-400 hover:text-red-600 text-lg font-bold leading-none">&#x2715;</button>` : ''}
+            `;
+            div.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calculatePrice));
+            container.appendChild(div);
+            calculatePrice();
+        }
+
+        function removePlate(id) {
+            document.getElementById('plate-' + id).remove();
+            // Relabel remaining plates
+            document.querySelectorAll('#plates-container > div').forEach((div, i) => {
+                div.querySelectorAll('label').forEach(lbl => {
+                    lbl.textContent = lbl.textContent.replace(/PLATE \d+/, 'PLATE ' + (i + 1));
+                });
+            });
+            calculatePrice();
+        }
+
+        function getPlateData() {
+            let totalGrams = 0, totalTimeHrs = 0;
+            const plates = [];
+            document.querySelectorAll('#plates-container > div').forEach(div => {
+                const g = parseFloat(div.querySelector('.plate-grams').value) || 0;
+                const hRaw = parseFloat(div.querySelector('.plate-hours').value) || 0;
+                const h = parseHours(hRaw);
+                totalGrams += g;
+                totalTimeHrs += h;
+                plates.push({ grams: g, hoursRaw: hRaw });
+            });
+            return { totalGrams, totalTimeHrs, plates };
+        }
+
+        async function apiFetch(url, options = {}) {
+            const res = await fetch(url, {
+                headers: { "Content-Type": "application/json" },
+                ...options
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+
+        function setStatus(msg, isError = false) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = isError ? 'text-xs text-red-500 mb-2' : 'text-xs text-green-600 mb-2';
+            if (msg) setTimeout(() => el.textContent = '', 3000);
+        }
+
+        async function loadQuotes() {
+            try {
+                quotes = await apiFetch('/api/quotes');
+                renderHistory();
+            } catch (e) {
+                setStatus('Could not reach server. Is server.py running?', true);
+            }
+        }
+
+        async function saveQuote() {
+            const product   = document.getElementById('product').value.trim() || "Unnamed Product";
+            const primerVal = parseFloat(document.getElementById('primer').value) || 0;
+            const paintVal  = parseFloat(document.getElementById('paint').value) || 0;
+            const { totalGrams, totalTimeHrs, plates } = getPlateData();
+
+            const filamentCost = totalGrams * 0.02;
+            const timeCost     = totalTimeHrs * 0.70;
+            const subtotal     = filamentCost + timeCost;
+            const markup       = subtotal * 3;
+            const shipping     = 5;
+            const finishCost   = paintVal > 0 ? paintVal : primerVal;
+
+            const newQuote = {
+                date:       new Date().toLocaleDateString('en-US'),
+                product:    product,
+                plainCost:  (markup + shipping).toFixed(2),
+                primerCost: (markup + shipping + primerVal).toFixed(2),
+                paintCost:  (markup + shipping + paintVal).toFixed(2),
+                finalCost:  (markup + shipping + finishCost).toFixed(2),
+                grams:      totalGrams,
+                hours:      plates[0]?.hoursRaw || 0,
+                primerVal, paintVal,
+                plates: JSON.stringify(plates)
+            };
+
+            try {
+                const result = await apiFetch('/api/quotes', { method: 'POST', body: JSON.stringify(newQuote) });
+                newQuote.id = result.id;
+                quotes.unshift(newQuote);
+                renderHistory();
+                setStatus('Quote saved.');
+            } catch (e) {
+                setStatus('Failed to save: ' + e.message, true);
+            }
+        }
+
+        function editQuote(index) {
+            const q = quotes[index];
+            document.getElementById('product').value = q.product;
+            document.getElementById('primer').value  = q.primerVal || 0;
+            document.getElementById('paint').value   = q.paintVal || 0;
+            // Rebuild plates
+            document.getElementById('plates-container').innerHTML = '';
+            plateCount = 0;
+            let plates = [];
+            try { plates = JSON.parse(q.plates || '[]'); } catch(e) {}
+            if (plates.length > 0) {
+                plates.forEach(p => addPlate(p.grams, p.hoursRaw));
+            } else {
+                addPlate(q.grams || 100, q.hours || 5);
+            }
+            calculatePrice();
+            window.scrollTo(0, 0);
+        }
+
+        async function deleteQuote(index) {
+            if (!confirm("Delete this quote?")) return;
+            const q = quotes[index];
+            try {
+                await apiFetch(`/api/quotes/${q.id}`, { method: 'DELETE' });
+                quotes.splice(index, 1);
+                renderHistory();
+                setStatus('Quote deleted.');
+            } catch (e) {
+                setStatus('Failed to delete: ' + e.message, true);
+            }
+        }
+
+        function toggleBulkEdit() {
+            bulkEditMode = true;
+            document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Editing...';
+            document.getElementById('bulkEditBtn').disabled = true;
+            renderHistory();
+        }
+
+        function cancelBulkEdit() {
+            bulkEditMode = false;
+            document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Bulk Edit';
+            document.getElementById('bulkEditBtn').disabled = false;
+            loadQuotes();
+        }
+
+        async function saveBulkEdits() {
+            const rows = document.querySelectorAll('#history tbody tr[data-index]');
+            rows.forEach(row => {
+                const i = parseInt(row.dataset.index);
+                row.querySelectorAll('input[data-field]').forEach(input => {
+                    quotes[i][input.dataset.field] = input.value.trim();
+                });
+            });
+            try {
+                await apiFetch('/api/quotes/bulk', { method: 'PUT', body: JSON.stringify(quotes) });
+                bulkEditMode = false;
+                document.getElementById('bulkEditBtn').textContent = '\u270f\ufe0f Bulk Edit';
+                document.getElementById('bulkEditBtn').disabled = false;
+                renderHistory();
+                setStatus('All changes saved.');
+            } catch (e) {
+                setStatus('Failed to save changes: ' + e.message, true);
+            }
+        }
+
+        async function deleteBulkRow(index) {
+            const q = quotes[index];
+            if (q.id) {
+                try {
+                    await apiFetch(`/api/quotes/${q.id}`, { method: 'DELETE' });
+                } catch (e) {
+                    setStatus('Failed to delete row: ' + e.message, true);
+                    return;
+                }
+            }
+            quotes.splice(index, 1);
+            renderHistory();
+        }
+
+        function downloadBackup() {
+            if (quotes.length === 0) return alert("No quotes to export.");
+            const today = new Date();
+            const dateStr = today.getFullYear() + '-' +
+                String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                String(today.getDate()).padStart(2, '0');
+            const data = quotes.map(q => ({
+                Date: q.date, Product: q.product,
+                "Plain Cost": q.plainCost, "Primer Cost": q.primerCost, "Paint Cost": q.paintCost
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "FDM Quotes");
+            XLSX.writeFile(wb, `FDM_Print_Prices_${dateStr}.xlsx`);
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history');
+            if (bulkEditMode) {
+                const cc = "border border-gray-300 rounded px-1 py-1 w-full focus:outline-none focus:ring-1 focus:ring-purple-400";
+                let html = `<div class="mb-3 flex gap-2">
+                    <button onclick="saveBulkEdits()" class="text-sm px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold">&#128190; Save All Changes</button>
+                    <button onclick="cancelBulkEdit()" class="text-sm px-4 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-xl">Cancel</button>
+                </div>`;
+                if (quotes.length === 0) {
+                    html += `<p class="text-gray-400 italic">No quotes remaining.</p>`;
+                } else {
+                    html += `<div class="overflow-x-auto"><table class="w-full text-xs">
+                        <thead><tr class="border-b bg-white">
+                            <th class="py-2 text-left pr-2">Date</th>
+                            <th class="py-2 text-left pr-2">Product</th>
+                            <th class="py-2 text-right pr-2">Plain ($)</th>
+                            <th class="py-2 text-right pr-2">+Primer ($)</th>
+                            <th class="py-2 text-right pr-2">+Paint ($)</th>
+                            <th class="py-2 w-12"></th>
+                        </tr></thead><tbody>`;
+                    quotes.forEach((q, i) => {
+                        const sp = q.product.replace(/"/g, '&quot;');
+                        html += `<tr class="border-b hover:bg-purple-50" data-index="${i}">
+                            <td class="py-1 pr-2"><input class="${cc}" data-field="date" value="${q.date}"></td>
+                            <td class="py-1 pr-2"><input class="${cc}" data-field="product" value="${sp}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="plainCost" value="${q.plainCost}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="primerCost" value="${q.primerCost}"></td>
+                            <td class="py-1 pr-2"><input class="${cc} text-right" data-field="paintCost" value="${q.paintCost}"></td>
+                            <td class="py-1 text-center"><button onclick="deleteBulkRow(${i})" class="text-red-500 hover:text-red-700 font-bold">&#x2715;</button></td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table></div>`;
+                }
+                container.innerHTML = html;
+                return;
+            }
+            if (quotes.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 italic">No quotes saved yet.</p>`;
+                return;
+            }
+            let html = `<table class="w-full"><thead><tr class="border-b bg-white">
+                <th class="py-3 text-left">Date</th><th class="py-3 text-left">Product</th>
+                <th class="py-3 text-right">Plain</th><th class="py-3 text-right">+Primer</th>
+                <th class="py-3 text-right">+Paint</th><th class="py-3 w-24"></th>
+            </tr></thead><tbody>`;
+            quotes.forEach((q, i) => {
+                html += `<tr class="border-b hover:bg-gray-50">
+                    <td class="py-3">${q.date}</td>
+                    <td class="py-3 font-medium">${q.product}</td>
+                    <td class="py-3 text-right">${q.plainCost}</td>
+                    <td class="py-3 text-right">${q.primerCost}</td>
+                    <td class="py-3 text-right">${q.paintCost}</td>
+                    <td class="py-3 text-center">
+                        <button onclick="editQuote(${i})" class="text-blue-600 hover:text-blue-800 text-xs mr-2">Edit</button>
+                        <button onclick="deleteQuote(${i})" class="text-red-600 hover:text-red-800 text-xs">Delete</button>
+                    </td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function calculatePrice() {
+            const { totalGrams, totalTimeHrs } = getPlateData();
+            const primerEl = document.getElementById('primer');
+            const paintEl  = document.getElementById('paint');
+            const paintVal = parseFloat(paintEl.value) || 0;
+
+            if (paintVal > 0) {
+                primerEl.value = "0";
+                primerEl.disabled = true;
+            } else {
+                primerEl.disabled = false;
+            }
+
+            const primerVal    = parseFloat(primerEl.value) || 0;
+            const filamentCost = totalGrams * 0.02;
+            const timeCost     = totalTimeHrs * 0.70;
+            const subtotal     = filamentCost + timeCost;
+            const markup       = subtotal * 3;
+            const shipping     = 5;
+            const finishCost   = paintVal > 0 ? paintVal : primerVal;
+            const total        = markup + shipping + finishCost;
+
+            document.getElementById('filament-display').textContent = '$' + filamentCost.toFixed(2);
+            document.getElementById('time-display').textContent     = '$' + timeCost.toFixed(2);
+            document.getElementById('subtotal').textContent         = '$' + subtotal.toFixed(2);
+            document.getElementById('markup-display').textContent   = '$' + markup.toFixed(2);
+            document.getElementById('total').textContent            = '$' + total.toFixed(2);
+        }
+
+        window.onload = () => {
+            addPlate(); // start with one plate
+            ['primer', 'paint', 'product'].forEach(id => {
+                document.getElementById(id).addEventListener('input', calculatePrice);
+            });
+            calculatePrice();
+            loadQuotes();
+        };
+    </script>
             const str = String(val);
             const parts = str.split('.');
             const hrs = parseInt(parts[0]) || 0;

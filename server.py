@@ -32,7 +32,7 @@ def get_conn():
 
 
 def init_db():
-    """Create the quotes table if it doesn't exist."""
+    """Create the quotes table if it doesn't exist, and migrate if needed."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -47,8 +47,13 @@ def init_db():
                     hours     NUMERIC,
                     primer_val NUMERIC,
                     paint_val  NUMERIC,
+                    plates    TEXT,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
+            """)
+            # Add plates column if upgrading from old schema
+            cur.execute("""
+                ALTER TABLE quotes ADD COLUMN IF NOT EXISTS plates TEXT;
             """)
         conn.commit()
 
@@ -65,6 +70,7 @@ def row_to_dict(row):
         "hours":      float(row["hours"] or 0),
         "primerVal":  float(row["primer_val"] or 0),
         "paintVal":   float(row["paint_val"] or 0),
+        "plates":     row["plates"] or "[]",
     }
 
 
@@ -90,14 +96,15 @@ def add_quote():
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO quotes (date, product, plain_cost, primer_cost, paint_cost, grams, hours, primer_val, paint_val)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO quotes (date, product, plain_cost, primer_cost, paint_cost, grams, hours, primer_val, paint_val, plates)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id;
             """, (
                 q.get("date"), q.get("product"),
                 q.get("plainCost"), q.get("primerCost"), q.get("paintCost"),
                 q.get("grams", 0), q.get("hours", 0),
-                q.get("primerVal", 0), q.get("paintVal", 0)
+                q.get("primerVal", 0), q.get("paintVal", 0),
+                q.get("plates", "[]")
             ))
             new_id = cur.fetchone()["id"]
         conn.commit()
