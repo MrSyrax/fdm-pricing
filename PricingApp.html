@@ -190,7 +190,7 @@ function getPlateData() {
     var totalGrams = 0, totalTimeHrs = 0, plates = [];
     document.querySelectorAll('#plates-container > div').forEach(function(div) {
         var g = parseFloat(div.querySelector('.plate-grams').value) || 0;
-        var hRaw = parseFloat(div.querySelector('.plate-hours').value) || 0;
+        var hRaw = div.querySelector('.plate-hours').value.trim();
         var h = parseHours(hRaw);
         totalGrams += g;
         totalTimeHrs += h;
