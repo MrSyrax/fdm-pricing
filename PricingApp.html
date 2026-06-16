@@ -51,8 +51,8 @@
             <!-- Markup -->
             <div class="bg-emerald-50 p-5 rounded-2xl flex justify-between items-center">
                 <div>
-                    <span class="font-bold text-emerald-800">200% Markup</span>
-                    <div class="text-xs text-emerald-600">(x2 on materials + time)</div>
+                    <span class="font-bold text-emerald-800">250% Markup</span>
+                    <div class="text-xs text-emerald-600">(x2.5 on materials + time)</div>
                 </div>
                 <div id="markup-display" class="text-2xl font-bold text-emerald-700">$0.00</div>
             </div>
@@ -207,7 +207,7 @@ function calculatePrice() {
     var filamentCost = data.totalGrams * 0.02;
     var timeCost = data.totalTimeHrs * 0.70;
     var subtotal = filamentCost + timeCost;
-    var markup = subtotal * 2;
+    var markup = subtotal * 2.5;
     var shipping = 5;
     var finishCost = paintVal > 0 ? paintVal : primerVal;
     var total = markup + shipping + finishCost;
@@ -252,7 +252,7 @@ async function saveQuote() {
     var filamentCost = data.totalGrams * 0.02;
     var timeCost = data.totalTimeHrs * 0.70;
     var subtotal = filamentCost + timeCost;
-    var markup = subtotal * 2;
+    var markup = subtotal * 2.5;
     var shipping = 5;
     var finishCost = paintVal > 0 ? paintVal : primerVal;
 
