@@ -130,13 +130,22 @@ let quotes = [];
 let bulkEditMode = false;
 let plateCount = 0;
 
-// Convert h.mm to decimal hours: 2.13 = 2hr 13min
+// Parse d.h.mm or h.mm into decimal hours
 function parseHours(val) {
-    const str = String(val);
-    const parts = str.split('.');
-    const hrs = parseInt(parts[0]) || 0;
-    const mins = parts[1] ? parseInt(parts[1].padEnd(2, '0').substring(0, 2)) : 0;
-    return hrs + (mins / 60);
+    var str = String(val).trim();
+    var parts = str.split('.');
+    if (parts.length >= 3) {
+        var days = parseInt(parts[0]) || 0;
+        var hrs  = parseInt(parts[1]) || 0;
+        var mins = parseInt(parts[2].padEnd(2,'0').substring(0,2)) || 0;
+        return (days * 24) + hrs + (mins / 60);
+    } else if (parts.length === 2) {
+        var hrs = parseInt(parts[0]) || 0;
+        var mins = parseInt(parts[1].padEnd(2,'0').substring(0,2)) || 0;
+        return hrs + (mins / 60);
+    } else {
+        return parseInt(parts[0]) || 0;
+    }
 }
 
 function addPlate(grams, hours) {
@@ -155,8 +164,8 @@ function addPlate(grams, hours) {
         '</div>' +
         '<div>' +
             '<label class="block text-xs text-gray-500 mb-1">PLATE ' + id + ' — Print Time (h.mm)</label>' +
-            '<input type="number" min="0" step="0.01" value="' + h + '" placeholder="e.g. 2.13" class="plate-hours w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
-            '<p class="text-xs text-gray-400 mt-1">h.mm — 2.13 = 2hr 13min</p>' +
+            '<input type="text" value="' + h + '" placeholder="e.g. 2.13 or 2.7.23" class="plate-hours w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
+            '<p class="text-xs text-gray-400 mt-1">h.mm or d.h.mm (2.7.23 = 2d 7hr 23min)</p>' +
         '</div>' +
         (id > 1 ? '<button onclick="removePlate(' + id + ')" class="absolute top-2 right-3 text-red-400 hover:text-red-600 text-lg font-bold leading-none">&#x2715;</button>' : '');
     div.querySelectorAll('input').forEach(function(inp) { inp.addEventListener('input', calculatePrice); });
