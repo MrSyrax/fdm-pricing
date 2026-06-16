@@ -205,7 +205,7 @@ function calculatePrice() {
 
     var primerVal = parseFloat(primerEl.value) || 0;
     var filamentCost = data.totalGrams * 0.02;
-    var timeCost = data.totalTimeHrs * 0.07;
+    var timeCost = data.totalTimeHrs * 0.70;
     var subtotal = filamentCost + timeCost;
     var markup = subtotal * 2;
     var shipping = 5;
@@ -250,7 +250,7 @@ async function saveQuote() {
     var data = getPlateData();
 
     var filamentCost = data.totalGrams * 0.02;
-    var timeCost = data.totalTimeHrs * 0.07;
+    var timeCost = data.totalTimeHrs * 0.70;
     var subtotal = filamentCost + timeCost;
     var markup = subtotal * 2;
     var shipping = 5;
