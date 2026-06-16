@@ -164,7 +164,7 @@ function addPlate(grams, hours) {
         '</div>' +
         '<div>' +
             '<label class="block text-xs text-gray-500 mb-1">PLATE ' + id + ' — Print Time (h.mm)</label>' +
-            '<input type="text" value="' + h + '" placeholder="e.g. 2.13 or 2.7.23" class="plate-hours w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
+            '<input type="text" inputmode="text" value="' + h + '" placeholder="e.g. 2.13 or 2.7.23" class="plate-hours w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">' +
             '<p class="text-xs text-gray-400 mt-1">h.mm or d.h.mm (2.7.23 = 2d 7hr 23min)</p>' +
         '</div>' +
         (id > 1 ? '<button onclick="removePlate(' + id + ')" class="absolute top-2 right-3 text-red-400 hover:text-red-600 text-lg font-bold leading-none">&#x2715;</button>' : '');
